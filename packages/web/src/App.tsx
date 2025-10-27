@@ -9,37 +9,40 @@ import Footer from "@components/UI/Footer.tsx";
 import { useTheme } from "@core/hooks/useTheme.ts";
 import { SidebarProvider, useAppStore, useDeviceStore } from "@core/stores";
 import { Dashboard } from "@pages/Dashboard/index.tsx";
-import { Outlet, useNavigate } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { MapProvider } from "react-map-gl/maplibre";
+import { Types } from "@meshtastic/core";
 
 export function App() {
   const { getDevice } = useDeviceStore();
   const { selectedDeviceId, setConnectDialogOpen, connectDialogOpen } =
     useAppStore();
-  const navigate = useNavigate();
-  const previousDeviceRef = useRef(getDevice(selectedDeviceId));
 
   const device = getDevice(selectedDeviceId);
 
   // Sets up light/dark mode based on user preferences or system settings
   useTheme();
 
-  // Redirect to home when a device connects
+  // Redirect to home when device disconnects
   useEffect(() => {
-    const previousDevice = previousDeviceRef.current;
+    if (!device?.connection) return;
 
-    // Check if device just became available (went from undefined to defined)
-    if (!previousDevice && device) {
-      console.log("Device connected, redirecting to home");
-      navigate({ to: "/", replace: true });
-    }
+    const handleDisconnect = (status: Types.DeviceStatusEnum) => {
+      if (status === Types.DeviceStatusEnum.DeviceDisconnected) {
+        console.log("Device disconnected, redirecting to home");
+        window.location.href = "/";
+      }
+    };
 
-    // Update the ref for next comparison
-    previousDeviceRef.current = device;
-  }, [device, navigate]);
+    device.connection.events.onDeviceStatus.subscribe(handleDisconnect);
+
+    return () => {
+      device.connection?.events.onDeviceStatus.unsubscribe(handleDisconnect);
+    };
+  }, [device]);
 
   return (
     <ErrorBoundary FallbackComponent={ErrorPage}>
